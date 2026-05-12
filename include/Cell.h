@@ -12,8 +12,8 @@ typedef enum {
 typedef enum { NUMBER, REF } ArgKind;
 
 typedef struct {
-  int col_index;
-  int row_num;
+  char *col_name;
+  long row_num;
 } CellRef;
 
 typedef struct {

@@ -13,7 +13,7 @@ typedef struct {
   int size;
 } HashIntRow;
 
-void rows_init(HashIntRow *h, int initial_capacity);
+int rows_init(HashIntRow *h, int initial_capacity);
 void rows_destroy(HashIntRow *h);
-void rows_put(HashIntRow *h, int key, Row *value);
+int rows_put(HashIntRow *h, int key, Row *value);
 Row *rows_get(const HashIntRow *h, int key);

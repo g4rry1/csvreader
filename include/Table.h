@@ -22,7 +22,7 @@ typedef struct {
 void table_init(Table *t);
 void table_destroy(Table *t);
 int table_add_column(Table *t, const char *name);
-Row *table_add_row(Table *t, int row_num);
+Row *table_add_row(Table *t, Row *row);
 Cell *table_get_cell(Table *t, int col_index, int row_num);
 int table_find_column_index(const Table *t, const char *name);
 
