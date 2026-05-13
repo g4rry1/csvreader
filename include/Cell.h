@@ -5,8 +5,7 @@ typedef enum {
   CELL_EMPTY,
   CELL_INT,
   CELL_FORMULA,
-  CELL_EVALUATING,
-  CELL_ERROR
+  CELL_EVALUATING
 } CellKind;
 
 typedef enum { NUMBER, REF } ArgKind;

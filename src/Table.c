@@ -92,22 +92,44 @@ long evaluate_cell(Table *t, Cell *cell, int *ok) {
     if (formula->arg1.kind == REF) {
 
       Cell *ref_cell = get_cell(t, formula->arg1.as.ref);
-      if (ref_cell == NULL) {
+      if (ref_cell == NULL || ref_cell->kind == CELL_EVALUATING) {
         *ok = 0;
         return 0;
       }
-      arg1 = ref_cell->as.value;
+      if (ref_cell->kind == CELL_FORMULA) {
+        cell->kind = CELL_EVALUATING;
+        arg1 = evaluate_cell(t, ref_cell, ok);
+        if (!*ok) {
+          return 0;
+        }
+      } else if (ref_cell->kind == CELL_INT) {
+        arg1 = ref_cell->as.value;
+      } else {
+        *ok = 0;
+        return 0;
+      }
     } else {
       arg1 = formula->arg1.as.number;
     }
 
     if (formula->arg2.kind == REF) {
       Cell *ref_cell = get_cell(t, formula->arg2.as.ref);
-      if (ref_cell == NULL) {
+      if (ref_cell == NULL || ref_cell->kind == CELL_EVALUATING) {
         *ok = 0;
         return 0;
       }
-      arg2 = ref_cell->as.value;
+      if (ref_cell->kind == CELL_FORMULA) {
+        cell->kind = CELL_EVALUATING;
+        arg2 = evaluate_cell(t, ref_cell, ok);
+        if (!*ok) {
+          return 0;
+        }
+      } else if (ref_cell->kind == CELL_INT) {
+        arg2 = ref_cell->as.value;
+      } else {
+        *ok = 0;
+        return 0;
+      }
     } else {
       arg2 = formula->arg2.as.number;
     }

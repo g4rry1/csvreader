@@ -7,7 +7,7 @@ void arg_clear(Arg *arg) {
 }
 
 void cell_clear(Cell *cell) {
-  if (cell->kind == CELL_FORMULA) {
+  if (cell->kind == CELL_FORMULA || cell->kind == CELL_EVALUATING) {
     arg_clear(&cell->as.formula->arg1);
     arg_clear(&cell->as.formula->arg2);
     free(cell->as.formula);
