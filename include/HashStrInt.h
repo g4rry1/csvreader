@@ -1,4 +1,5 @@
 #pragma once
+#include <stdint.h>
 typedef struct {
   int occupied;
   char *key;
@@ -7,11 +8,11 @@ typedef struct {
 
 typedef struct {
   ColIdxBucket *buckets;
-  int capacity;
-  int size;
+  uint32_t capacity;
+  uint32_t size;
 } HashStrInt;
 
-int col_index_init(HashStrInt *h, int capacity);
+int col_index_reserve(HashStrInt *h, int n_strs);
 void col_index_destroy(HashStrInt *h);
 int col_index_put(HashStrInt *h, const char *key, int value);
 int col_index_get(const HashStrInt *h, const char *key);

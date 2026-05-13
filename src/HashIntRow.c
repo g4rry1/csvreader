@@ -6,36 +6,21 @@ uint32_t hash_int(long key) {
   return (uint32_t)((unsigned long)key * 2654435769u);
 }
 
-int rows_init(HashIntRow *h, int initial_capacity) {
-  h->buckets = calloc(initial_capacity, sizeof(RowBucket));
-  if (h->buckets == NULL) {
-    return -1;
-  }
-  h->capacity = initial_capacity;
-  h->size = 0;
-  return 0;
-}
-
-void rows_destroy(HashIntRow *h) {
-  for (int i = 0; i < h->capacity; i++) {
-    if (h->buckets[i].occupied) {
-      row_destroy(h->buckets[i].value, 0);
-    }
-  }
+void row_index_destroy(HashIntRow *h) {
   free(h->buckets);
   h->buckets = NULL;
   h->capacity = 0;
   h->size = 0;
 }
 
-int rows_put(HashIntRow *h, int key, Row *value) {
+int row_index_put(HashIntRow *h, long key, Row *value) {
   if (h->size * 2 >= h->capacity) {
-    int new_capacity = h->capacity * 2;
+    uint32_t new_capacity = h->capacity == 0 ? 16 : h->capacity * 2;
     RowBucket *new_buckets = calloc(new_capacity, sizeof(RowBucket));
     if (new_buckets == NULL) {
       return -1;
     }
-    for (int i = 0; i < h->capacity; i++) {
+    for (uint32_t i = 0; i < h->capacity; i++) {
       if (h->buckets[i].occupied) {
         uint32_t idx = hash_int(h->buckets[i].key) & (new_capacity - 1);
         while (new_buckets[idx].occupied) {
@@ -49,7 +34,7 @@ int rows_put(HashIntRow *h, int key, Row *value) {
     h->capacity = new_capacity;
   }
   uint32_t idx = hash_int(key) & (h->capacity - 1);
-  int steps = 0;
+  uint32_t steps = 0;
 
   while (h->buckets[idx].occupied) {
     if (h->buckets[idx].key == key) {
@@ -60,14 +45,18 @@ int rows_put(HashIntRow *h, int key, Row *value) {
       return -1;
     }
   }
+  h->buckets[idx].key = key;
+  h->buckets[idx].value = value;
+  h->buckets[idx].occupied = 1;
+  h->size++;
   return 0;
 }
 
-Row *rows_get(const HashIntRow *h, int key) {
+Row *row_index_get(const HashIntRow *h, long key) {
   if (h->buckets == NULL)
     return NULL;
   uint32_t idx = hash_int(key) & (h->capacity - 1);
-  int steps = 0;
+  uint32_t steps = 0;
 
   while (h->buckets[idx].occupied) {
     if (h->buckets[idx].key == key) {

@@ -1,5 +1,4 @@
 #include "Parse.h"
-#include "HashIntRow.h"
 #include "HashStrInt.h"
 #include "Row.h"
 #include "Table.h"
@@ -8,13 +7,13 @@
 #include <string.h>
 
 int build_column_index(Table *t) {
-  if (col_index_init(&t->column_index, t->n_columns) != 0) {
+  if (col_index_reserve(&t->col_index, t->n_columns) != 0) {
     return -1;
   }
 
   for (int i = 0; i < t->n_columns; i++) {
-    if (col_index_put(&t->column_index, t->column_names[i], i) != 0) {
-      col_index_destroy(&t->column_index);
+    if (col_index_put(&t->col_index, t->column_names[i], i) != 0) {
+      col_index_destroy(&t->col_index);
       return -1;
     }
   }
@@ -115,7 +114,7 @@ int parse_header(FILE *f, Table *t) {
   return 0;
 }
 
-char *parse_cell_ref(char *s, CellRef *out, Table *t) {
+const char *parse_cell_ref(const char *s, CellRef *out) {
   int cap = 16;
   char *column_name_buf = malloc(cap);
   if (column_name_buf == NULL) {
@@ -144,33 +143,36 @@ char *parse_cell_ref(char *s, CellRef *out, Table *t) {
 
   column_name_buf[column_name_len] = '\0';
 
-  long number_row = strtol(s, NULL, 10);
+  char *endptr;
+  long number_row = strtol(s, &endptr, 10);
   if (number_row == 0) {
     free(column_name_buf);
     return NULL;
   }
+  s = endptr;
   out->col_name = column_name_buf;
   out->row_num = number_row;
   return s;
 }
 
-int parse_formula(char *s, Formula *out, Table *t) {
+int parse_formula(const char *s, Formula *out) {
   char *endptr;
   long number1 = strtol(s, &endptr, 10);
   if (s == endptr) {
     CellRef ref;
-    s = parse_cell_ref(s, &ref, t);
-    if (s == NULL) {
+    s = parse_cell_ref(s, &ref);
+    if (s == NULL)
       return -1;
-    }
     out->arg1.kind = REF;
     out->arg1.as.ref = ref;
   } else {
     out->arg1.kind = NUMBER;
     out->arg1.as.number = number1;
   }
+
   int op = *s++;
   if (op != '+' && op != '-' && op != '*' && op != '/') {
+    arg_clear(&out->arg1);
     return -1;
   }
   switch (op) {
@@ -191,8 +193,9 @@ int parse_formula(char *s, Formula *out, Table *t) {
   long number2 = strtol(s, &endptr, 10);
   if (s == endptr) {
     CellRef ref;
-    s = parse_cell_ref(s, &ref, t);
+    s = parse_cell_ref(s, &ref);
     if (s == NULL) {
+      arg_clear(&out->arg1);
       return -1;
     }
     out->arg2.kind = REF;
@@ -201,13 +204,16 @@ int parse_formula(char *s, Formula *out, Table *t) {
     out->arg2.kind = NUMBER;
     out->arg2.as.number = number2;
   }
+
   if (*s != '\0') {
+    arg_clear(&out->arg1);
+    arg_clear(&out->arg2);
     return -1;
   }
   return 0;
 }
 
-int parse_cell_value(const char *s, Cell *out, Table *t) {
+int parse_cell_value(const char *s, Cell *out) {
   char *endptr;
   long value = strtol(s, &endptr, 10);
   if (*endptr == '\0') {
@@ -215,7 +221,11 @@ int parse_cell_value(const char *s, Cell *out, Table *t) {
     out->as.value = value;
     return 0;
   } else if (s[0] == '=') {
-    if (parse_formula(s + 1, out->as.formula, t) != 0) {
+    out->as.formula = malloc(sizeof(Formula));
+    if (!out->as.formula)
+      return -1;
+    if (parse_formula(s + 1, out->as.formula) != 0) {
+      free(out->as.formula);
       return -1;
     }
     out->kind = CELL_FORMULA;
@@ -235,13 +245,8 @@ int parse_data_line(FILE *f, Table *t) {
   }
   while ((c = fgetc(f)) != ',' && c != EOF) {
     if (size + 1 >= cap) {
-      cap *= 2;
-      char *tmp = realloc(cell_buf, cap);
-      if (tmp == NULL) {
-        free(cell_buf);
-        return -1;
-      }
-      cell_buf = tmp;
+      free(cell_buf);
+      return -1;
     }
     cell_buf[size++] = (char)c;
   }
@@ -268,7 +273,7 @@ int parse_data_line(FILE *f, Table *t) {
     if (c == ',') {
       if (size > 0) {
         cell_buf[size] = '\0';
-        if (parse_cell_value(cell_buf, &row->cells[number_cells], t) != 0) {
+        if (parse_cell_value(cell_buf, &row->cells[number_cells]) != 0) {
           row_destroy(row, t->n_columns);
           free(cell_buf);
           return -1;
@@ -283,6 +288,7 @@ int parse_data_line(FILE *f, Table *t) {
         cap *= 2;
         char *tmp = realloc(cell_buf, cap);
         if (tmp == NULL) {
+          row_destroy(row, t->n_columns);
           free(cell_buf);
           return -1;
         }
@@ -292,7 +298,8 @@ int parse_data_line(FILE *f, Table *t) {
     }
   }
 
-  if (parse_cell_value(cell_buf, &row->cells[number_cells], t) != 0) {
+  cell_buf[size] = '\0';
+  if (parse_cell_value(cell_buf, &row->cells[number_cells]) != 0) {
     row_destroy(row, t->n_columns);
     free(cell_buf);
     return -1;
@@ -305,8 +312,11 @@ int parse_data_line(FILE *f, Table *t) {
     return -1;
   }
 
-  table_add_row(t, row);
-  rows_put(&t->rows, row->row_num, row);
+  if (table_add_row(t, row) == NULL) {
+    row_destroy(row, t->n_columns);
+    free(cell_buf);
+    return -1;
+  }
 
   free(cell_buf);
   return 0;
@@ -323,9 +333,6 @@ int parse_csv(FILE *f, Table *t) {
 
   int result = 0;
   while ((result = parse_data_line(f, t)) == 0) {
-  }
-  if (result != EOF) {
-    return result;
   }
 
   return 0;

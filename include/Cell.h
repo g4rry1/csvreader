@@ -38,4 +38,5 @@ typedef struct {
   } as;
 } Cell;
 
+void arg_clear(Arg *arg);
 void cell_clear(Cell *cell);

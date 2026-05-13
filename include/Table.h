@@ -10,21 +10,22 @@
 typedef struct {
   char **column_names;
   int n_columns;
-  HashStrInt column_index;
+  HashStrInt col_index;
 
-  HashIntRow rows;
-
-  Row **rows_in_order;
+  long *rows;
   int n_rows;
-  int cap_rows_in_order;
+  int rows_cap;
+
+  HashIntRow row_index;
 } Table;
 
-void table_init(Table *t);
 void table_destroy(Table *t);
 int table_add_column(Table *t, const char *name);
 Row *table_add_row(Table *t, Row *row);
-Cell *table_get_cell(Table *t, int col_index, int row_num);
+Cell *table_get_cell(Table *t, int col_index, long row_num);
 int table_find_column_index(const Table *t, const char *name);
+
+Cell *get_cell(Table *t, CellRef ref);
 
 int evaluate_all(Table *t);
 long evaluate_cell(Table *t, Cell *cell, int *ok);

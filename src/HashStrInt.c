@@ -30,7 +30,7 @@ char *str_copy(const char *s) {
   return copy;
 }
 
-int col_index_init(HashStrInt *h, int n_strs) {
+int col_index_reserve(HashStrInt *h, int n_strs) {
   uint32_t capacity = next_power_of_two(n_strs * 2);
   h->buckets = calloc(capacity, sizeof(ColIdxBucket));
   if (h->buckets == NULL) {
@@ -42,7 +42,7 @@ int col_index_init(HashStrInt *h, int n_strs) {
 }
 
 void col_index_destroy(HashStrInt *h) {
-  for (int i = 0; i < h->capacity; i++) {
+  for (uint32_t i = 0; i < h->capacity; i++) {
     if (h->buckets[i].occupied) {
       free(h->buckets[i].key);
     }
@@ -55,7 +55,7 @@ void col_index_destroy(HashStrInt *h) {
 
 int col_index_put(HashStrInt *h, const char *key, int value) {
   uint32_t idx = hash_str(key) & (h->capacity - 1);
-  int steps = 0;
+  uint32_t steps = 0;
 
   while (h->buckets[idx].occupied) {
     if (strcmp(h->buckets[idx].key, key) == 0) {
@@ -81,7 +81,7 @@ int col_index_get(const HashStrInt *h, const char *key) {
   if (h->buckets == NULL)
     return -1;
   uint32_t idx = hash_str(key) & (h->capacity - 1);
-  int steps = 0;
+  uint32_t steps = 0;
 
   while (h->buckets[idx].occupied) {
     if (strcmp(h->buckets[idx].key, key) == 0) {
