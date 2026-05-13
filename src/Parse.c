@@ -168,6 +168,7 @@ int parse_formula(const char *s, Formula *out) {
   } else {
     out->arg1.kind = NUMBER;
     out->arg1.as.number = number1;
+    s = endptr;
   }
 
   int op = *s++;
@@ -203,6 +204,7 @@ int parse_formula(const char *s, Formula *out) {
   } else {
     out->arg2.kind = NUMBER;
     out->arg2.as.number = number2;
+    s = endptr;
   }
 
   if (*s != '\0') {
