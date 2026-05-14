@@ -1,5 +1,7 @@
 #include "HashStrInt.h"
+#include "errors.h"
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -34,11 +36,11 @@ int col_index_reserve(HashStrInt *h, int n_strs) {
   uint32_t capacity = next_power_of_two(n_strs * 2);
   h->buckets = calloc(capacity, sizeof(ColIdxBucket));
   if (h->buckets == NULL) {
-    return -1;
+    return ERR_MEMORY;
   }
   h->capacity = capacity;
   h->size = 0;
-  return 0;
+  return ERR_OK;
 }
 
 void col_index_destroy(HashStrInt *h) {
@@ -59,22 +61,23 @@ int col_index_put(HashStrInt *h, const char *key, int value) {
 
   while (h->buckets[idx].occupied) {
     if (strcmp(h->buckets[idx].key, key) == 0) {
-      return -1;
+      fprintf(stderr, "Parse error: duplicate column name '%s'\n", key);
+      return ERR_PARSE;
     }
     idx = (idx + 1) & (h->capacity - 1);
     if (++steps >= h->capacity)
-      return -1;
+      return ERR_MEMORY;
   }
 
   char *key_copy = str_copy(key);
   if (!key_copy)
-    return -1;
+    return ERR_MEMORY;
 
   h->buckets[idx].key = key_copy;
   h->buckets[idx].occupied = 1;
   h->buckets[idx].value = value;
   h->size++;
-  return 0;
+  return ERR_OK;
 }
 
 int col_index_get(const HashStrInt *h, const char *key) {

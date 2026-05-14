@@ -2,45 +2,48 @@
 #include "HashStrInt.h"
 #include "Row.h"
 #include "Table.h"
+#include "errors.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 int build_column_index(Table *t) {
-  if (col_index_reserve(&t->col_index, t->n_columns) != 0) {
-    return -1;
-  }
+  int err = col_index_reserve(&t->col_index, t->n_columns);
+  if (err != ERR_OK)
+    return err;
 
   for (int i = 0; i < t->n_columns; i++) {
-    if (col_index_put(&t->col_index, t->column_names[i], i) != 0) {
+    err = col_index_put(&t->col_index, t->column_names[i], i);
+    if (err != ERR_OK) {
       col_index_destroy(&t->col_index);
-      return -1;
+      return err;
     }
   }
-  return 0;
+  return ERR_OK;
 }
 
 static int parse_header_fail(char **column_names, int n_columns,
-                             char *name_buf) {
+                             char *name_buf, int err) {
   for (int i = 0; i < n_columns; i++) {
     free(column_names[i]);
   }
   free(column_names);
   free(name_buf);
-  return -1;
+  return err;
 }
 
 int parse_header(FILE *f, Table *t) {
   int first = fgetc(f);
   if (first != ',') {
-    return -1;
+    fprintf(stderr, "Parse error: header must start with ','\n");
+    return ERR_PARSE;
   }
 
   int cap_columns = 16;
   int n_columns = 0;
   char **column_names = malloc(cap_columns * sizeof(char *));
   if (column_names == NULL) {
-    return -1;
+    return ERR_MEMORY;
   }
 
   int name_buf_cap = 256;
@@ -48,7 +51,7 @@ int parse_header(FILE *f, Table *t) {
   char *name_buf = malloc(name_buf_cap);
   if (name_buf == NULL) {
     free(column_names);
-    return -1;
+    return ERR_MEMORY;
   }
 
   int c;
@@ -58,14 +61,15 @@ int parse_header(FILE *f, Table *t) {
 
     if (c == ',') {
       if (name_buf_len == 0) {
-        return parse_header_fail(column_names, n_columns, name_buf);
+        fprintf(stderr, "Parse error: empty column name in header\n");
+        return parse_header_fail(column_names, n_columns, name_buf, ERR_PARSE);
       }
 
       if (n_columns >= cap_columns) {
         cap_columns *= 2;
         char **tmp = realloc(column_names, cap_columns * sizeof(char *));
         if (tmp == NULL) {
-          return parse_header_fail(column_names, n_columns, name_buf);
+          return parse_header_fail(column_names, n_columns, name_buf, ERR_MEMORY);
         }
         column_names = tmp;
       }
@@ -77,14 +81,14 @@ int parse_header(FILE *f, Table *t) {
       name_buf_len = 0;
       name_buf = malloc(name_buf_cap);
       if (name_buf == NULL) {
-        return parse_header_fail(column_names, n_columns, NULL);
+        return parse_header_fail(column_names, n_columns, NULL, ERR_MEMORY);
       }
     } else {
       if (name_buf_len + 1 >= name_buf_cap) {
         name_buf_cap *= 2;
         char *tmp = realloc(name_buf, name_buf_cap);
         if (tmp == NULL) {
-          return parse_header_fail(column_names, n_columns, name_buf);
+          return parse_header_fail(column_names, n_columns, name_buf, ERR_MEMORY);
         }
         name_buf = tmp;
       }
@@ -96,14 +100,15 @@ int parse_header(FILE *f, Table *t) {
     int new_cap = cap_columns * 2;
     char **tmp = realloc(column_names, new_cap * sizeof(char *));
     if (tmp == NULL) {
-      return parse_header_fail(column_names, n_columns, name_buf);
+      return parse_header_fail(column_names, n_columns, name_buf, ERR_MEMORY);
     }
     column_names = tmp;
     cap_columns = new_cap;
   }
 
   if (name_buf_len == 0) {
-    return parse_header_fail(column_names, n_columns, name_buf);
+    fprintf(stderr, "Parse error: empty column name in header\n");
+    return parse_header_fail(column_names, n_columns, name_buf, ERR_PARSE);
   }
 
   name_buf[name_buf_len] = '\0';
@@ -111,7 +116,7 @@ int parse_header(FILE *f, Table *t) {
 
   t->column_names = column_names;
   t->n_columns = n_columns;
-  return 0;
+  return ERR_OK;
 }
 
 const char *parse_cell_ref(const char *s, CellRef *out) {
@@ -145,7 +150,14 @@ const char *parse_cell_ref(const char *s, CellRef *out) {
 
   char *endptr;
   long number_row = strtol(s, &endptr, 10);
-  if (number_row == 0) {
+  if (endptr == s) {
+    fprintf(stderr, "Parse error: missing row number in cell reference '%s'\n", column_name_buf);
+    free(column_name_buf);
+    return NULL;
+  }
+  if (number_row <= 0) {
+    fprintf(stderr, "Parse error: row number in cell reference '%s%ld' must be positive\n",
+            column_name_buf, number_row);
     free(column_name_buf);
     return NULL;
   }
@@ -162,7 +174,7 @@ int parse_formula(const char *s, Formula *out) {
     CellRef ref;
     s = parse_cell_ref(s, &ref);
     if (s == NULL)
-      return -1;
+      return ERR_PARSE;
     out->arg1.kind = REF;
     out->arg1.as.ref = ref;
   } else {
@@ -172,9 +184,15 @@ int parse_formula(const char *s, Formula *out) {
   }
 
   int op = *s++;
-  if (op != '+' && op != '-' && op != '*' && op != '/') {
+  if (op == '\0') {
+    fprintf(stderr, "Parse error: missing operator in formula (expected +, -, *, /)\n");
     arg_clear(&out->arg1);
-    return -1;
+    return ERR_PARSE;
+  }
+  if (op != '+' && op != '-' && op != '*' && op != '/') {
+    fprintf(stderr, "Parse error: invalid operator '%c' in formula (expected +, -, *, /)\n", op);
+    arg_clear(&out->arg1);
+    return ERR_PARSE;
   }
   switch (op) {
   case '+':
@@ -197,7 +215,7 @@ int parse_formula(const char *s, Formula *out) {
     s = parse_cell_ref(s, &ref);
     if (s == NULL) {
       arg_clear(&out->arg1);
-      return -1;
+      return ERR_PARSE;
     }
     out->arg2.kind = REF;
     out->arg2.as.ref = ref;
@@ -208,11 +226,12 @@ int parse_formula(const char *s, Formula *out) {
   }
 
   if (*s != '\0') {
+    fprintf(stderr, "Parse error: unexpected characters after formula: '%s'\n", s);
     arg_clear(&out->arg1);
     arg_clear(&out->arg2);
-    return -1;
+    return ERR_PARSE;
   }
-  return 0;
+  return ERR_OK;
 }
 
 int parse_cell_value(const char *s, Cell *out) {
@@ -221,64 +240,84 @@ int parse_cell_value(const char *s, Cell *out) {
   if (*endptr == '\0') {
     out->kind = CELL_INT;
     out->as.value = value;
-    return 0;
+    return ERR_OK;
   } else if (s[0] == '=') {
     out->as.formula = malloc(sizeof(Formula));
     if (!out->as.formula)
-      return -1;
-    if (parse_formula(s + 1, out->as.formula) != 0) {
+      return ERR_MEMORY;
+    if (parse_formula(s + 1, out->as.formula) != ERR_OK) {
       free(out->as.formula);
-      return -1;
+      return ERR_PARSE;
     }
     out->kind = CELL_FORMULA;
   } else {
-    return -1;
+    return ERR_PARSE;
   }
-  return 0;
+  return ERR_OK;
 }
 
 int parse_data_line(FILE *f, Table *t) {
+  int peek = fgetc(f);
+  if (peek == EOF)
+    return ERR_EOF;
+  ungetc(peek, f);
+
   int c;
   int cap = 32;
   int size = 0;
   char *cell_buf = malloc(cap);
   if (cell_buf == NULL) {
-    return -1;
+    return ERR_MEMORY;
   }
-  while ((c = fgetc(f)) != ',' && c != EOF) {
+  while ((c = fgetc(f)) != ',' && c != '\n' && c != EOF) {
     if (size + 1 >= cap) {
       free(cell_buf);
-      return -1;
+      return ERR_MEMORY;
     }
     cell_buf[size++] = (char)c;
   }
   cell_buf[size] = '\0';
 
   char *endptr;
-  long value = strtol(cell_buf, &endptr, 10);
-  if (*endptr != '\0') {
+  long row_num = strtol(cell_buf, &endptr, 10);
+  if (*endptr != '\0' || row_num <= 0) {
+    fprintf(stderr, "Parse error: invalid row number '%s' (must be a positive integer)\n", cell_buf);
     free(cell_buf);
-    return -1;
+    return ERR_PARSE;
   }
 
-  Row *row = row_create(value, t->n_columns);
+  if (c != ',') {
+    fprintf(stderr, "Parse error: row %ld has 0 cells, expected %d\n", row_num, t->n_columns);
+    free(cell_buf);
+    return ERR_PARSE;
+  }
+
+  Row *row = row_create(row_num, t->n_columns);
   if (row == NULL) {
     free(cell_buf);
-    return -1;
+    return ERR_MEMORY;
   }
 
   size = 0;
-
   int number_cells = 0;
 
   while ((c = fgetc(f)) != EOF && c != '\n') {
+    if (number_cells >= t->n_columns) {
+      fprintf(stderr, "Parse error: row %ld has more than %d cells\n", row_num, t->n_columns);
+      row_destroy(row, t->n_columns);
+      free(cell_buf);
+      return ERR_PARSE;
+    }
     if (c == ',') {
       if (size > 0) {
         cell_buf[size] = '\0';
-        if (parse_cell_value(cell_buf, &row->cells[number_cells]) != 0) {
+        int err = parse_cell_value(cell_buf, &row->cells[number_cells]);
+        if (err != ERR_OK) {
+          fprintf(stderr, "Parse error: invalid cell '%s' in row %ld, column '%s'\n",
+                  cell_buf, row_num, t->column_names[number_cells]);
           row_destroy(row, t->n_columns);
           free(cell_buf);
-          return -1;
+          return ERR_PARSE;
         }
       } else {
         row->cells[number_cells].kind = CELL_EMPTY;
@@ -292,7 +331,7 @@ int parse_data_line(FILE *f, Table *t) {
         if (tmp == NULL) {
           row_destroy(row, t->n_columns);
           free(cell_buf);
-          return -1;
+          return ERR_MEMORY;
         }
         cell_buf = tmp;
       }
@@ -300,42 +339,57 @@ int parse_data_line(FILE *f, Table *t) {
     }
   }
 
-  cell_buf[size] = '\0';
-  if (parse_cell_value(cell_buf, &row->cells[number_cells]) != 0) {
+  if (number_cells >= t->n_columns) {
+    fprintf(stderr, "Parse error: row %ld has more than %d cells\n", row_num, t->n_columns);
     row_destroy(row, t->n_columns);
     free(cell_buf);
-    return -1;
+    return ERR_PARSE;
+  }
+
+  if (size == 0) {
+    row->cells[number_cells].kind = CELL_EMPTY;
+  } else {
+    cell_buf[size] = '\0';
+    int err = parse_cell_value(cell_buf, &row->cells[number_cells]);
+    if (err != ERR_OK) {
+      fprintf(stderr, "Parse error: invalid cell '%s' in row %ld, column '%s'\n",
+              cell_buf, row_num, t->column_names[number_cells]);
+      row_destroy(row, t->n_columns);
+      free(cell_buf);
+      return ERR_PARSE;
+    }
   }
   number_cells++;
 
   if (number_cells != t->n_columns) {
+    fprintf(stderr, "Parse error: row %ld has %d cells, expected %d\n",
+            row_num, number_cells, t->n_columns);
     row_destroy(row, t->n_columns);
     free(cell_buf);
-    return -1;
+    return ERR_PARSE;
   }
 
   if (table_add_row(t, row) == NULL) {
     row_destroy(row, t->n_columns);
     free(cell_buf);
-    return -1;
+    return ERR_MEMORY;
   }
 
   free(cell_buf);
-  return 0;
+  return ERR_OK;
 }
 
 int parse_csv(FILE *f, Table *t) {
   int err = parse_header(f, t);
-  if (err)
+  if (err != ERR_OK)
     return err;
 
   err = build_column_index(t);
-  if (err)
+  if (err != ERR_OK)
     return err;
 
-  int result = 0;
-  while ((result = parse_data_line(f, t)) == 0) {
+  int result;
+  while ((result = parse_data_line(f, t)) == ERR_OK) {
   }
-
-  return 0;
+  return result == ERR_EOF ? ERR_OK : result;
 }

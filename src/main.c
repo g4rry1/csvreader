@@ -1,32 +1,37 @@
 
 #include "Parse.h"
 #include "Table.h"
+#include "errors.h"
+#include <stdio.h>
 
 int main(int argc, char *argv[]) {
-  (void)argc;
+  if (argc < 2) {
+    fprintf(stderr, "Usage: %s <file.csv>\n", argv[0]);
+    return ERR_PARSE;
+  }
   FILE *f = fopen(argv[1], "r");
   if (!f) {
-    perror("fopen");
-    return -1;
+    perror(argv[1]);
+    return ERR_PARSE;
   }
 
   Table table = {0};
-  if (parse_csv(f, &table)) {
-    fprintf(stderr, "Failed to parse CSV\n");
+  int err = parse_csv(f, &table);
+  if (err != ERR_OK) {
     table_destroy(&table);
     fclose(f);
-    return -1;
+    return err;
   }
 
-  if (evaluate_all(&table)) {
-    fprintf(stderr, "Failed to evaluate all cells\n");
+  err = evaluate_all(&table);
+  if (err != ERR_OK) {
     table_destroy(&table);
     fclose(f);
-    return -1;
+    return err;
   }
 
   table_print(&table, stdout);
   table_destroy(&table);
   fclose(f);
-  return 0;
+  return ERR_OK;
 }

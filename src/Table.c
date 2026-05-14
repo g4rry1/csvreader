@@ -3,6 +3,7 @@
 #include "HashIntRow.h"
 #include "HashStrInt.h"
 #include "Row.h"
+#include "errors.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -92,18 +93,27 @@ int evaluate_cell(Table *t, Cell *cell) {
     if (formula->arg1.kind == REF) {
 
       Cell *ref_cell = get_cell(t, formula->arg1.as.ref);
-      if (ref_cell == NULL || ref_cell->kind == CELL_EVALUATING) {
-        return -1;
+      if (ref_cell == NULL) {
+        fprintf(stderr, "Eval error: cell '%s%ld' does not exist\n",
+                formula->arg1.as.ref.col_name, formula->arg1.as.ref.row_num);
+        return ERR_EVAL;
+      }
+      if (ref_cell->kind == CELL_EVALUATING) {
+        fprintf(stderr, "Eval error: circular reference detected at '%s%ld'\n",
+                formula->arg1.as.ref.col_name, formula->arg1.as.ref.row_num);
+        return ERR_EVAL;
       }
       if (ref_cell->kind == CELL_FORMULA) {
         if (evaluate_cell(t, ref_cell)) {
-          return -1;
+          return ERR_EVAL;
         }
         arg1 = ref_cell->as.value;
       } else if (ref_cell->kind == CELL_INT) {
         arg1 = ref_cell->as.value;
       } else {
-        return -1;
+        fprintf(stderr, "Eval error: cell '%s%ld' is empty\n",
+                formula->arg1.as.ref.col_name, formula->arg1.as.ref.row_num);
+        return ERR_EVAL;
       }
     } else {
       arg1 = formula->arg1.as.number;
@@ -111,18 +121,27 @@ int evaluate_cell(Table *t, Cell *cell) {
 
     if (formula->arg2.kind == REF) {
       Cell *ref_cell = get_cell(t, formula->arg2.as.ref);
-      if (ref_cell == NULL || ref_cell->kind == CELL_EVALUATING) {
-        return -1;
+      if (ref_cell == NULL) {
+        fprintf(stderr, "Eval error: cell '%s%ld' does not exist\n",
+                formula->arg2.as.ref.col_name, formula->arg2.as.ref.row_num);
+        return ERR_EVAL;
+      }
+      if (ref_cell->kind == CELL_EVALUATING) {
+        fprintf(stderr, "Eval error: circular reference detected at '%s%ld'\n",
+                formula->arg2.as.ref.col_name, formula->arg2.as.ref.row_num);
+        return ERR_EVAL;
       }
       if (ref_cell->kind == CELL_FORMULA) {
         if (evaluate_cell(t, ref_cell)) {
-          return -1;
+          return ERR_EVAL;
         }
         arg2 = ref_cell->as.value;
       } else if (ref_cell->kind == CELL_INT) {
         arg2 = ref_cell->as.value;
       } else {
-        return -1;
+        fprintf(stderr, "Eval error: cell '%s%ld' is empty\n",
+                formula->arg2.as.ref.col_name, formula->arg2.as.ref.row_num);
+        return ERR_EVAL;
       }
     } else {
       arg2 = formula->arg2.as.number;
@@ -142,19 +161,20 @@ int evaluate_cell(Table *t, Cell *cell) {
       break;
     case DIV:
       if (arg2 == 0) {
-        return -1;
+        fprintf(stderr, "Eval error: division by zero\n");
+        return ERR_EVAL;
       }
       result = arg1 / arg2;
       break;
     default:
-      return -1;
+      return ERR_EVAL;
     }
     cell_clear(cell);
     cell->kind = CELL_INT;
     cell->as.value = result;
-    return 0;
+    return ERR_OK;
   }
-  return -1;
+  return ERR_EVAL;
 }
 
 int evaluate_all(Table *t) {
@@ -163,11 +183,11 @@ int evaluate_all(Table *t) {
     for (int j = 0; j < t->n_columns; j++) {
       Cell *cell = &row->cells[j];
       if (cell->kind == CELL_FORMULA) {
-        if (evaluate_cell(t, cell)) {
-          return -1;
-        }
+        int err = evaluate_cell(t, cell);
+        if (err != ERR_OK)
+          return err;
       }
     }
   }
-  return 0;
+  return ERR_OK;
 }
