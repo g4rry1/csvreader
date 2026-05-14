@@ -84,29 +84,26 @@ Cell *get_cell(Table *t, CellRef ref) {
   return &row->cells[col_index];
 }
 
-long evaluate_cell(Table *t, Cell *cell, int *ok) {
-  *ok = 1;
+int evaluate_cell(Table *t, Cell *cell) {
   if (cell->kind == CELL_FORMULA) {
+    cell->kind = CELL_EVALUATING;
     Formula *formula = cell->as.formula;
     long arg1 = 0, arg2 = 0;
     if (formula->arg1.kind == REF) {
 
       Cell *ref_cell = get_cell(t, formula->arg1.as.ref);
       if (ref_cell == NULL || ref_cell->kind == CELL_EVALUATING) {
-        *ok = 0;
-        return 0;
+        return -1;
       }
       if (ref_cell->kind == CELL_FORMULA) {
-        cell->kind = CELL_EVALUATING;
-        arg1 = evaluate_cell(t, ref_cell, ok);
-        if (!*ok) {
-          return 0;
+        if (evaluate_cell(t, ref_cell)) {
+          return -1;
         }
+        arg1 = ref_cell->as.value;
       } else if (ref_cell->kind == CELL_INT) {
         arg1 = ref_cell->as.value;
       } else {
-        *ok = 0;
-        return 0;
+        return -1;
       }
     } else {
       arg1 = formula->arg1.as.number;
@@ -115,42 +112,49 @@ long evaluate_cell(Table *t, Cell *cell, int *ok) {
     if (formula->arg2.kind == REF) {
       Cell *ref_cell = get_cell(t, formula->arg2.as.ref);
       if (ref_cell == NULL || ref_cell->kind == CELL_EVALUATING) {
-        *ok = 0;
-        return 0;
+        return -1;
       }
       if (ref_cell->kind == CELL_FORMULA) {
-        cell->kind = CELL_EVALUATING;
-        arg2 = evaluate_cell(t, ref_cell, ok);
-        if (!*ok) {
-          return 0;
+        if (evaluate_cell(t, ref_cell)) {
+          return -1;
         }
+        arg2 = ref_cell->as.value;
       } else if (ref_cell->kind == CELL_INT) {
         arg2 = ref_cell->as.value;
       } else {
-        *ok = 0;
-        return 0;
+        return -1;
       }
     } else {
       arg2 = formula->arg2.as.number;
     }
 
+    long result = 0;
+
     switch (formula->op) {
     case ADD:
-      return arg1 + arg2;
+      result = arg1 + arg2;
+      break;
     case SUB:
-      return arg1 - arg2;
+      result = arg1 - arg2;
+      break;
     case MUL:
-      return arg1 * arg2;
+      result = arg1 * arg2;
+      break;
     case DIV:
       if (arg2 == 0) {
-        *ok = 0;
-        return 0;
+        return -1;
       }
-      return arg1 / arg2;
+      result = arg1 / arg2;
+      break;
+    default:
+      return -1;
     }
+    cell_clear(cell);
+    cell->kind = CELL_INT;
+    cell->as.value = result;
+    return 0;
   }
-  *ok = 0;
-  return 0;
+  return -1;
 }
 
 int evaluate_all(Table *t) {
@@ -159,14 +163,9 @@ int evaluate_all(Table *t) {
     for (int j = 0; j < t->n_columns; j++) {
       Cell *cell = &row->cells[j];
       if (cell->kind == CELL_FORMULA) {
-        int ok;
-        long value = evaluate_cell(t, cell, &ok);
-        if (!ok) {
+        if (evaluate_cell(t, cell)) {
           return -1;
         }
-        cell_clear(cell);
-        cell->kind = CELL_INT;
-        cell->as.value = value;
       }
     }
   }

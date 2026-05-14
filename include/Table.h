@@ -28,7 +28,7 @@ int table_find_column_index(const Table *t, const char *name);
 Cell *get_cell(Table *t, CellRef ref);
 
 int evaluate_all(Table *t);
-long evaluate_cell(Table *t, Cell *cell, int *ok);
+int evaluate_cell(Table *t, Cell *cell);
 long evaluate_arg(Table *t, Arg *arg, int *ok);
 
 void table_print(const Table *t, FILE *f);
