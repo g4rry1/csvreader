@@ -1,17 +1,18 @@
 #pragma once
 #include <stdint.h>
+
 #include "Row.h"
 
 typedef struct {
-  int occupied;
-  long key;
-  Row *value;
+    int occupied;
+    long key;
+    Row *value;
 } RowBucket;
 
 typedef struct {
-  RowBucket *buckets;
-  uint32_t capacity;
-  uint32_t size;
+    RowBucket *buckets;
+    uint32_t capacity;
+    uint32_t size;
 } HashIntRow;
 
 void row_index_destroy(HashIntRow *h);

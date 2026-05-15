@@ -2,15 +2,15 @@
 #include <stddef.h>
 #include <stdint.h>
 typedef struct {
-  int occupied;
-  char *key;
-  int value;
+    int occupied;
+    char *key;
+    int value;
 } ColIdxBucket;
 
 typedef struct {
-  ColIdxBucket *buckets;
-  uint32_t capacity;
-  uint32_t size;
+    ColIdxBucket *buckets;
+    uint32_t capacity;
+    uint32_t size;
 } HashStrInt;
 
 int col_index_reserve(HashStrInt *h, size_t n_strs);
