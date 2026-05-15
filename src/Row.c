@@ -1,7 +1,7 @@
 #include "Row.h"
 #include <stdlib.h>
 
-Row *row_create(long row_num, int n_columns) {
+Row *row_create(long row_num, size_t n_columns) {
   Row *row = malloc(sizeof(Row));
   if (row == NULL) {
     return NULL;
@@ -15,8 +15,8 @@ Row *row_create(long row_num, int n_columns) {
   return row;
 }
 
-void row_destroy(Row *row, int n_columns) {
-  for (int i = 0; i < n_columns; i++) {
+void row_destroy(Row *row, size_t n_columns) {
+  for (size_t i = 0; i < n_columns; i++) {
     cell_clear(&row->cells[i]);
   }
   free(row->cells);

@@ -1,4 +1,5 @@
 #pragma once
+#include <stddef.h>
 #include "Cell.h"
 
 typedef struct {
@@ -6,5 +7,5 @@ typedef struct {
   Cell *cells;
 } Row;
 
-Row *row_create(long row_num, int n_columns);
-void row_destroy(Row *row, int n_columns);
+Row *row_create(long row_num, size_t n_columns);
+void row_destroy(Row *row, size_t n_columns);

@@ -1,8 +1,11 @@
 #include "HashIntRow.h"
+#include "errors.h"
 #include <stdint.h>
 #include <stdlib.h>
 
-uint32_t hash_int(long key) {
+#define INITIAL_HASH_CAP 16
+
+static uint32_t hash_int(long key) {
   return (uint32_t)((unsigned long)key * 2654435769u);
 }
 
@@ -15,10 +18,10 @@ void row_index_destroy(HashIntRow *h) {
 
 int row_index_put(HashIntRow *h, long key, Row *value) {
   if (h->size * 2 >= h->capacity) {
-    uint32_t new_capacity = h->capacity == 0 ? 16 : h->capacity * 2;
+    uint32_t new_capacity = h->capacity == 0 ? INITIAL_HASH_CAP : h->capacity * 2;
     RowBucket *new_buckets = calloc(new_capacity, sizeof(RowBucket));
     if (new_buckets == NULL) {
-      return -1;
+      return ERR_MEMORY;
     }
     for (uint32_t i = 0; i < h->capacity; i++) {
       if (h->buckets[i].occupied) {
@@ -38,18 +41,18 @@ int row_index_put(HashIntRow *h, long key, Row *value) {
 
   while (h->buckets[idx].occupied) {
     if (h->buckets[idx].key == key) {
-      return -1;
+      return ERR_PARSE;
     }
     idx = (idx + 1) & (h->capacity - 1);
     if (++steps >= h->capacity) {
-      return -1;
+      return ERR_PARSE;
     }
   }
   h->buckets[idx].key = key;
   h->buckets[idx].value = value;
   h->buckets[idx].occupied = 1;
   h->size++;
-  return 0;
+  return ERR_OK;
 }
 
 Row *row_index_get(const HashIntRow *h, long key) {

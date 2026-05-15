@@ -5,7 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-uint32_t hash_str(const char *s) {
+static uint32_t hash_str(const char *s) {
   uint32_t h = 2166136261u;
   while (*s) {
     h ^= (unsigned char)*s++;
@@ -14,14 +14,14 @@ uint32_t hash_str(const char *s) {
   return h;
 }
 
-uint32_t next_power_of_two(uint32_t n) {
+static uint32_t next_power_of_two(uint32_t n) {
   uint32_t p = 1;
   while (p < n)
     p *= 2;
   return p;
 }
 
-char *str_copy(const char *s) {
+static char *str_copy(const char *s) {
   if (s == NULL)
     return NULL;
   size_t len = strlen(s) + 1;
@@ -32,8 +32,8 @@ char *str_copy(const char *s) {
   return copy;
 }
 
-int col_index_reserve(HashStrInt *h, int n_strs) {
-  uint32_t capacity = next_power_of_two(n_strs * 2);
+int col_index_reserve(HashStrInt *h, size_t n_strs) {
+  uint32_t capacity = next_power_of_two((uint32_t)(n_strs * 2));
   h->buckets = calloc(capacity, sizeof(ColIdxBucket));
   if (h->buckets == NULL) {
     return ERR_MEMORY;
@@ -66,7 +66,7 @@ int col_index_put(HashStrInt *h, const char *key, int value) {
     }
     idx = (idx + 1) & (h->capacity - 1);
     if (++steps >= h->capacity)
-      return ERR_MEMORY;
+      return ERR_PARSE;
   }
 
   char *key_copy = str_copy(key);

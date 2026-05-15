@@ -15,5 +15,7 @@ typedef struct {
 } HashIntRow;
 
 void row_index_destroy(HashIntRow *h);
+/* Returns ERR_OK on success, ERR_MEMORY on allocation failure,
+   ERR_PARSE if key already exists. */
 int row_index_put(HashIntRow *h, long key, Row *value);
 Row *row_index_get(const HashIntRow *h, long key);
