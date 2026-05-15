@@ -3,10 +3,10 @@
  * Invalid: randomly generated broken tables — verify the right error is
  * returned.
  */
-#include <cmocka.h>
 #include <setjmp.h>
 #include <stdarg.h>
 #include <stddef.h>
+#include <cmocka.h>
 
 #include "Cell.h"
 #include "Parse.h"

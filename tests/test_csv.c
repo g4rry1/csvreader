@@ -1,8 +1,8 @@
 /* Tests for csvreader: parsing and evaluation */
-#include <cmocka.h>
 #include <setjmp.h>
 #include <stdarg.h>
 #include <stddef.h>
+#include <cmocka.h>
 
 #include "Cell.h"
 #include "Parse.h"
